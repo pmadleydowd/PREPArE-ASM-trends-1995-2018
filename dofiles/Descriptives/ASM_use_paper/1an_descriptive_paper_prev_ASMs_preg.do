@@ -10,7 +10,7 @@ set scheme s2color
 net install grc1leg, from(http://www.stata.com/users/vwiggins/)
 
 *********************************************************************************
-*1.Figure 2
+*1.Figure 1
 *********************************************************************************
 *Generates tables (in tempfile), overall then by inidcation 
 
@@ -44,22 +44,26 @@ foreach indication in All epilepsy bipolar somatic_cond other_psych_gp {
 	| flag_topiramate_prd7==1 | flag_phenytoin_prd5==1 | flag_phenytoin_prd6==1 ///
 	| flag_phenytoin_prd7==1*/
 
-	***TABLE FOR FIGURE 2: year and % exposed for any indication by pregnancy
+	***TABLE FOR FIGURE 1: year and % exposed for any indication by pregnancy
 	*period (Pre-pre-pregnancy, preg and post-pregnancy)
 	*Pre-pre-pregnancy, preg and post-pregnancy, by year
 	foreach x in prepreg preg {
 		preserve
 			recode flag_anydrug_`x' 0=.
 			collapse (count) flag_anydrug_`x' (count) n, by(pregyear)
-			gen percent_`x'=(flag_anydrug_`x'/n)*100
-			keep pregyear percent n
+			gen prop_`x' = flag_anydrug_`x'/n
+			gen percent_`x'= prop_`x'*100
+			gen se_`x' = sqrt(prop_`x' * (1-prop_`x') / n ) 
+			gen lciperc_`x' = 100 * (prop_`x' -  invnormal(0.975) * se_`x')    
+			gen uciperc_`x' = 100 * (prop_`x' +  invnormal(0.975) * se_`x')    
+			keep pregyear percent n se lci uci
 			list
 			tempfile period`x'
 			save `period`x''
 		restore
 	}
 
-	*Figure 2
+	*Figure 1a
 	use `periodprepreg', clear
 	foreach x in  preg  {
 		merge 1:1  pregyear using `period`x'', nogen
@@ -76,63 +80,70 @@ foreach indication in All epilepsy bipolar somatic_cond other_psych_gp {
 }
 
 
-   *Figure 2
+   *Figure 1b
 *all  
 use "$Datadir\Derived_data\CPRD\_temp\fig2_All.dta", replace
-keep pregyear percent_preg 
+keep pregyear percent_preg lciperc_preg uciperc_preg
 
-line  percent_preg pregyear, ///
-	ylabel(0(1)2, angle(horizontal) labsize(vsmall)) ///
-	xlabel(, labsize(vsmall)) ///
-	xtitle("Year of pregnancy", size(vsmall)) ///
-	graphregion(color(white)) bgcolor(white) ///
-	lwidth(medthick medthick medthick medthick medthick) ///
-	ytitle("Prevalence of ASM prescribing" " " "among all pregnancies (%)" " ", size(vsmall)) ///
-	text(4 1995 "a) Overall", placement(r) size(small)) ///
-	fysize(25) graphregion(margin(large)) ///
-	name(fig2_all, replace)
+twoway line  percent_preg pregyear, color(blue) || ///
+	   rarea uciperc_preg lciperc_preg pregyear , color(blue%20) ///
+		ylabel(0(1)2, angle(horizontal) labsize(vsmall)) ///
+		xlabel(, labsize(vsmall)) ///
+		xtitle("Year of pregnancy", size(vsmall)) ///
+		graphregion(color(white)) bgcolor(white) ///
+		lwidth(medthick medthick medthick medthick medthick) ///
+		ytitle("Prevalence of ASM prescribing" " " "among all pregnancies (%)" " ", size(vsmall)) ///
+		text(3 1995 "a) Overall", placement(r) size(small)) ///
+		fysize(25) graphregion(margin(large)) ///
+		legend(off) ///
+		name(fig2_all, replace)
   
   
 *indications
 use "$Datadir\Derived_data\CPRD\_temp\fig2_epilepsy.dta", replace
 foreach indication in  bipolar somatic_cond other_psych_gp {
-append using "$Datadir\Derived_data\CPRD\_temp\fig2_`indication'.dta"
+	append using "$Datadir\Derived_data\CPRD\_temp\fig2_`indication'.dta"
 }
-
 
 gen ind=2 if  epilepsy==1
 replace ind=3 if  bipolar==1 
 replace ind=4 if  somatic_cond==1
 replace ind=5 if  other_psych_gp==1
 list
-keep pregyear percent_preg ind
-reshape wide percent, i(pregyear) j(ind)
+keep pregyear percent_preg ind lciperc_preg uciperc_preg
+*reshape wide percent lciperc_preg uciperc_preg, i(pregyear) j(ind)
 
-line  percent_preg* pregyear, ///
-	ylabel(0(10)50, angle(horizontal) labsize(vsmall)) ///
-	xlabel(, labsize(vsmall)) ///
-	xtitle("Year of pregnancy", size(vsmall)) ///
-	graphregion(color(white)) bgcolor(white) ///
-	lwidth(medthick medthick medthick medthick medthick) ///
-	ytitle("Prevalence of ASM prescribing" " " "among pregnancies with the indication (%)" " ", size(vsmall)) ///
-	legend( label(1 "Epilepsy") label(2 "Bipolar") label(3 "Other somatic") ///
-			label(4 "Other psychiatric") cols(2) size(vsmall) textw(*7)) ///
-	text(60 1995 "b) By indication", placement(r) size(small)) ///
-	fysize(75) graphregion(margin(large)) ///
-	name(fig2_ind, replace)
+twoway 	rarea uciperc_preg lciperc_preg pregyear if ind == 2 , color(navy%20) || ///
+		rarea uciperc_preg lciperc_preg pregyear if ind == 3 , color(maroon%20) || ///
+		rarea uciperc_preg lciperc_preg pregyear if ind == 4 , color(forest_green%20) || ///
+		rarea uciperc_preg lciperc_preg pregyear if ind == 5 , color(dkorange%20) || ///
+		line  percent_preg* pregyear if ind == 2, color(navy)  || ///
+		line  percent_preg* pregyear if ind == 3, color(maroon) || ///
+		line  percent_preg* pregyear if ind == 4, color(forest_green) || ///
+		line  percent_preg* pregyear if ind == 5, color(dkorange)  ///
+		ylabel(0(10)60, angle(horizontal) labsize(vsmall)) ///
+		xlabel(, labsize(vsmall)) ///
+		xtitle("Year of pregnancy", size(vsmall)) ///
+		graphregion(color(white)) bgcolor(white) ///
+		lwidth(medthick medthick medthick medthick medthick) ///
+		ytitle("Prevalence of ASM prescribing" " " "among pregnancies with the indication (%)" " ", size(vsmall)) ///
+		legend(order(5 "Epilepsy" ///
+					 6 "Bipolar" ///
+					 7 "Other somatic" ///
+					 8 "Other psychiatric") ///
+					 cols(2) size(vsmall) textw(*7)) ///
+		text(70 1995 "b) By indication", placement(r) size(small)) ///
+		fysize(75) graphregion(margin(large)) ///
+		name(fig2_ind, replace)
 	
 graph combine fig2_all fig2_ind, cols(1) graphregion(color(white))
-graph export "$Graphdir/descriptivepaper/figure2.png", replace width(1500) height(2000)
-graph export "$Graphdir/descriptivepaper/figure2.pdf", replace 
+graph export "$Graphdir/descriptivepaper/figure1.svg", replace width(1500) height(2000)
+graph export "$Graphdir/descriptivepaper/figure1.png", replace width(1500) height(2000)
+graph export "$Graphdir/descriptivepaper/figure1.pdf", replace 
 
-  
-erase "$Graphdir/descriptivepaper/figure2_asmindAll.gph"
-foreach indication in epilepsy bipolar somatic_cond other_psych_gp {
-	erase "$Graphdir/descriptivepaper/figure2_asmind`indication'.gph"
-}
 
 *********************************************************************************
-*Figure 4
+*Figure 3
 *********************************************************************************
 
 foreach indication in All epilepsy bipolar somatic_cond other_psych_gp {
@@ -153,7 +164,7 @@ foreach indication in All epilepsy bipolar somatic_cond other_psych_gp {
 	}	
 
 	*Keep necessary variables
-	keep flag_* pregyear polytherapy dosage_tri_1 n 
+	keep flag_* pregyear dosage_tri_1 n 
 	gen flag_other_new_preg=1 if flag_other_prd5==1 | flag_other_prd6==1 ///
 	| flag_other_prd7==1 | flag_topiramate_prd5==1 | flag_topiramate_prd6==1 ///
 	| flag_topiramate_prd7==1 | flag_phenytoin_prd5==1 | flag_phenytoin_prd6==1 ///
@@ -180,7 +191,7 @@ foreach indication in All epilepsy bipolar somatic_cond other_psych_gp {
 		restore
 	}
 }
-*Figure 4
+*Figure 3
 use `period1_All', clear
 gen indication="All"
 forvalues x=2/7 {
@@ -224,12 +235,12 @@ list periodind period ind_num, sepby(period)
 
 *Add N's - total with each indication in whole cohort 
 list 
-twoway (bar percent periodind if ind_num==1) ///
-       (bar percent periodind if ind_num==2) ///
-       (bar percent periodind if ind_num==3) ///
-       (bar percent periodind if ind_num==4) ///
+twoway (bar percent periodind if ind_num==1, color(navy)) ///
+       (bar percent periodind if ind_num==2, color(maroon)) ///
+       (bar percent periodind if ind_num==3, color(forest_green)) ///
+       (bar percent periodind if ind_num==4, color(dkorange)) ///
        (rcap uci lci periodind, lcol(black)), ///
-	    ylabel(0(10)50, angle(horizontal)) ytitle("%")  ///
+	    ylabel(0(10)40, angle(horizontal)) ytitle("%")  ///
 		xlabel(2.5  `" "9-12 months" "pre-pregnancy" "' ///
 			   7.5  `" "6-9 months" "pre-pregnancy" "' ///
 			   12.5 `" "3-6 months" "pre-pregnancy" "' ///
@@ -240,9 +251,9 @@ twoway (bar percent periodind if ind_num==1) ///
 			   , labsize(vsmall)) xtitle("") ///
 		xscale(range(0 35)) ///
 		legend(label(1 "Epilepsy (N=9,570)") label(2 "Bipolar (N=2,028)") label(3 "Other somatic (N=97,830)") label(4 "Other psychiatric (N=261,233)") ///
-			  label(5 "95% CI") cols(3) size(vsmall)) ///
+			  label(5 "95% CI") cols(2) size(vsmall)) ///
 		graphregion(color(white))
- graph export "$Graphdir/descriptivepaper/figure4_byasmind.tif", width(1000) replace
+ graph export "$Graphdir/descriptivepaper/figure3_byasmind.png", width(2000) height(1500) replace
 
 
 /*reshape wide percent lci uci, i(n) j(indication, string)
@@ -286,7 +297,7 @@ keep if `indication'==1
 }	
 
 *Keep necessary variables
-keep flag_* pregyear polytherapy dosage_tri_1 n 
+keep flag_* pregyear polytherapy_firsttrim dosage_tri_1 n 
 gen flag_other_new_preg=1 if flag_other_prd5==1 | flag_other_prd6==1 ///
 | flag_other_prd7==1 | flag_topiramate_prd5==1 | flag_topiramate_prd6==1 ///
 | flag_topiramate_prd7==1 | flag_phenytoin_prd5==1 | flag_phenytoin_prd6==1 ///
@@ -334,12 +345,13 @@ use `poly_dose', clear
 	ytitle("%") ///
 	legend(label(1 "Polytherapy") label(2 "High dose exposure") cols(2)) ///
 	graphregion(color(white)) ///
-	saving( "$Graphdir/descriptivepaper/figure4_asmind`indication'.gph",  replace) 
+	saving( "$Graphdir/descriptivepaper/figures1_asmind`indication'.gph",  replace) 
  graph export "$Graphdir/descriptivepaper/figureS1_all.tif", width(1000) replace
 }
 
+
 *********************************************************************************
-*Figure 3
+*Figure 2
 *********************************************************************************
 
 set scheme s1color
@@ -361,13 +373,13 @@ foreach indication in All  bipolar somatic_cond other_psych_gp epilepsy {
 	}	
 
 	*Keep necessary variables
-	keep flag_* pregyear polytherapy dosage_tri_1 n 
+	keep flag_* pregyear  n 
 	gen flag_other_new_preg=1 if flag_other_prd5==1 | flag_other_prd6==1 ///
 	| flag_other_prd7==1 | flag_topiramate_prd5==1 | flag_topiramate_prd6==1 ///
 	| flag_topiramate_prd7==1 | flag_phenytoin_prd5==1 | flag_phenytoin_prd6==1 ///
 	| flag_phenytoin_prd7==1
 
-	*Table for Fig3: proportion of women prescribed each ASM drug class anytime during pregnancy during the study period, overall and by indication
+	*Table for Fig2: proportion of women prescribed each ASM drug class anytime during pregnancy during the study period, overall and by indication
 	*foreach drug in lamotrigine valproate carbamazepine pregabalin levetiracetam gabapentin *phenytoin levetiracetam topiramate other {
 	foreach drug in lamotrigine valproate carbamazepine pregabalin levetiracetam gabapentin levetiracetam topiramate  phenytoin other {
 		preserve
@@ -381,7 +393,7 @@ foreach indication in All  bipolar somatic_cond other_psych_gp epilepsy {
 	}
 
 
-*Figure 3
+*Figure 2
 	use `ASM_lamotrigine', clear
 	foreach drug in lamotrigine valproate carbamazepine pregabalin levetiracetam gabapentin  topiramate phenytoin other {
 		merge 1:1  pregyear using `ASM_`drug'', nogen
@@ -420,33 +432,13 @@ foreach indication in All  bipolar somatic_cond other_psych_gp epilepsy {
 }
 
 grc1leg fig_All fig_epilepsy fig_bipolar fig_other_psych_gp fig_somatic_cond, cols(2) ring(0) position(4)
-graph export "$Graphdir/descriptivepaper/figure3_asmind.tif", width(2000) height(1500) replace
+graph export "$Graphdir/descriptivepaper/figure2_asmind.tif", width(2000) height(1500) replace
+graph export "$Graphdir/descriptivepaper/figure2_asmind.png", width(2000) height(1500) replace
+graph export "$Graphdir/descriptivepaper/figure2_asmind.svg", width(2000) height(1500) replace
+graph export "$Graphdir/descriptivepaper/figure2_asmind.pdf", replace
 
 
-
-*Prev over time for text
-use "\\ads.bris.ac.uk\folders\Health Sciences\SafeHaven\CPRD Projects UOB\Projects\20_000228\Analysis\datafiles\Derived_data\CPRD\_temp\fig2_All.dta", clear
-
-
-
-cd "\\ads.bris.ac.uk\folders\Health Sciences\SafeHaven\CPRD Projects UOB\Projects\20_000228\Analysis\graphfiles\descriptivepaper"
- graph combine "figure3_asmind_epilepsy_new.gph" "figure3_asmind_bipolar_new.gph" 
- graph export figure4_bip_epil.jpg, replace width(4000)
- 
- graph combine  "figure3_asmind_somatic_cond_new.gph"  "figure3_asmind_other_psych_gp_new.gph" 
-  graph export figure4_somatic_psych.jpg, replace width(4000)
   
-  graph use "\\ads.bris.ac.uk\folders\Health Sciences\SafeHaven\CPRD Projects UOB\Projects\20_000228\Analysis\graphfiles\descriptivepaper\figure3_asmind_All.gph"
-  graph export figure4_all.jpg, replace width(4000)
 
 
 
-  erase "$Graphdir/descriptivepaper/figure3_asmind_All.gph"
-foreach indication in epilepsy bipolar somatic_cond other_psych_gp {
- erase "$Graphdir/descriptivepaper/figure3_asmind_`indication'.gph"
-}
-foreach indication in All epilepsy bipolar somatic_cond other_psych_gp {
-cap erase "$Graphdir/descriptivepaper/figure3_asmind_`indication'_new.gph"
-  erase "$Graphdir/descriptivepaper/figure3_asmind_`indication'_new.jpg"
-
-}

@@ -66,8 +66,7 @@ antipsychotics_365_prepreg   antidepressants_365_prepreg 	///
 foreach var in eth5 smokstatus bmi_cat {
  bysort matage_cat:  tab outcome1_discont miss`var', col chi
 } 
-
-stop 
+ 
 /* Covariates not incorporated
 -illicit drug use (definition TBC), 
 -number of hospitalizations in the year before pregnancy (linked data only)
@@ -110,38 +109,111 @@ rename CPRD_consultation_events_cat cons_cat
 tempname myhandle	
 file open `myhandle' using "$Datadir\Descriptive_statistics\ASM_use_paper\Table2_ASM_use_paper_ORs.txt", write replace
 file write `myhandle' _n "Table 2" _tab _n
+
 *Univariate
 foreach var in matage_cat epilepsy bipolar somatic_cond other_psych_gp eth5  imd5  smokstatus bmi_cat hazardous_drinking illicit parity_cat cons_cat seizure_events_CPRD_HES_cat antipsychotics_365_prepreg antidepressants_365_prepreg aed_class_gp dosage_pre_preg {
 di "`var'"
-levelsof `var',  local(`var'levs) sep(	)
-foreach level in `r(levels)' {
-    di "****** `var' = `level'"
-file write `myhandle' "`var'" _tab 
-file write `myhandle' "`var'==`level'" _tab
-*Unadjusted
-logistic outcome1_discont i.`var', cluster(patid)     
-lincom _b[`level'.`var'], rrr
-local minadjhr=`r(estimate)'
-local minadjuci=`r(ub)'
-local minadjlci=`r(lb)'
+levelsof `var',  local(`var'levs) sep(	) matrow(mat`var')
+	foreach lev in `r(levels)' {
+		if mat`var'[1,1] == 0 {
+			local level = `lev' + 1 
+		}
+		else if mat`var'[1,1] == 1 {
+			local level = `lev' 			
+		}	
+		
+		di "****** `var' = `level'"
+		file write `myhandle' "`var'" _tab 
+		file write `myhandle' "`var'==`level'" _tab
+		*Unadjusted
+		logistic outcome1_discont i.`var', vce(cluster patid)     
+		local minadjhr= r(table)[1,`level']
+		local minadjp = r(table)[4,`level']		
+		local minadjlci=r(table)[5,`level']
+		local minadjuci=r(table)[6,`level']
 
-*Age-adjusted: With cluster–robust standard errors for clustering by levels of cvar
-logistic outcome1_discont i.`var' ib3.matage_cat,  vce(cluster patid) 
-lincom _b[`level'.`var'], rrr 
-local adjhr=`r(estimate)'
-local adjuci=`r(ub)'
-local adjlci=`r(lb)'
+		* Calendar year adjusted: With cluster–robust standard errors for clustering by levels of cvar
+		logistic outcome1_discont i.`var' i.pregstart_year_cat,  vce(cluster patid) 
+		local adjhr= r(table)[1,`level']
+		local adjp = r(table)[4,`level']	
+		local adjlci=r(table)[5,`level']
+		local adjuci=r(table)[6,`level']
 
-file write `myhandle'  %4.2f  (`minadjhr') " (" %4.2f (`minadjlci')  "-" %4.2f (`minadjuci') ")" _tab
-file write `myhandle'  %4.2f  (`adjhr') " (" %4.2f (`adjlci')  "-" %4.2f (`adjuci') ")" _tab _n
+		file write `myhandle'  %4.2f  (`minadjhr') " (" %4.2f (`minadjlci')  "-" %4.2f (`minadjuci') ")" _tab
+		file write `myhandle'  %4.2f  (`adjhr') " (" %4.2f (`adjlci')  "-" %4.2f (`adjuci') ")" _tab 
+		file write `myhandle'  %5.3f  (`adjp') _n
+		
+	}
 }
-**#
-file write `myhandle' _n 
-}
-di as txt `"(Results are in {browse "$Datadir\Descriptive_statistics\ASM_use_paper\Table2_ASM_use_paper_ORs_ASM_use_paper.txt"})"'	
+di as txt `"(Results are in {browse "$Datadir\Descriptive_statistics\ASM_use_paper\Table2_ASM_use_paper_ORs.txt"})"'	
 
 
 foreach var in eth5 imd5  {
     tab `var'
 }
+
+
+
+********************************************************************************
+* Multiple imputation 
+********************************************************************************
+mi set flong 
+mi register imputed eth5 bmi_cat smokstatus
+
+mi impute chained ///
+	(mlogit, augment) eth5 smokstatus ///
+	(ologit) bmi_cat ///
+	= 	i.outcome1_discont ///
+		i.matage_cat i.pregstart_year_cat ///
+		i.epilepsy i.bipolar i.somatic_cond i.other_psych_gp imd5  ///
+		/*i.hazardous_drinking i.illicit i.parity_cat i.cons_cat ///
+		i.seizure_events_CPRD_HES_cat i.antipsychotics_365_prepreg ///
+		i.antidepressants_365_prepreg i.aed_class_gp i.dosage_pre_preg  */ ///
+	, add(10) rseed(4698346)
+
+	
+	*file write code to generate ORs and write to text file
+tempname myhandle	
+file open `myhandle' using "$Datadir\Descriptive_statistics\ASM_use_paper\Table2_ASM_use_paper_ORs_MI.txt", write replace
+file write `myhandle' _n "Table 2" _tab _n
+*Univariate
+*Univariate
+foreach var in eth5 smokstatus bmi_cat {
+di "`var'"
+levelsof `var',  local(`var'levs) sep(	) matrow(mat`var')
+	foreach lev in `r(levels)' {
+		if mat`var'[1,1] == 0 {
+			local level = `lev' + 1 
+		}
+		else if mat`var'[1,1] == 1 {
+			local level = `lev' 			
+		}	
+		
+		di "****** `var' = `level'"
+		file write `myhandle' "`var'" _tab 
+		file write `myhandle' "`var'==`level'" _tab
+		*Unadjusted
+		mi estimate, eform: logistic outcome1_discont i.`var', vce(cluster patid)     
+		local minadjhr= r(table)[1,`level']
+		local minadjuci=r(table)[6,`level']
+		local minadjlci=r(table)[5,`level']
+
+		*Age and calendar year adjusted: With cluster–robust standard errors for clustering by levels of cvar
+		mi estimate, eform: logistic outcome1_discont i.`var' ///
+								i.pregstart_year_cat,  ///
+								vce(cluster patid) 
+		local adjhr= r(table)[1,`level']
+		local adjuci=r(table)[6,`level']
+		local adjlci=r(table)[5,`level']
+
+		file write `myhandle'  %4.2f  (`minadjhr') " (" %4.2f (`minadjlci')  "-" %4.2f (`minadjuci') ")" _tab
+		file write `myhandle'  %4.2f  (`adjhr') " (" %4.2f (`adjlci')  "-" %4.2f (`adjuci') ")" _tab _n
+	}
+	file write `myhandle' _n 
+}
+
+di as txt `"(Results are in {browse "$Datadir\Descriptive_statistics\ASM_use_paper\Table2_ASM_use_paper_ORs_MI.txt"})"'	
+
+
+
 

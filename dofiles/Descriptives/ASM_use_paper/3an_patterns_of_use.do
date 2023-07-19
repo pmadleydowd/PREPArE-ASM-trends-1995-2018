@@ -69,6 +69,6 @@ graph bar percent*, over(indication, relabel(1 `""All pregnancies"  "(N=8,753)"'
 label(4 "Initiate during pregnancy")  label(5 "Other") cols(2) size(vsmall)) saving( "$Graphdir/descriptivepaper/use_patterns.gph",  replace)
 
 
- graph export "$Graphdir/descriptivepaper/figure5_use_patterns.jpg", width(10000) replace
+ graph export "$Graphdir/descriptivepaper/figure4_use_patterns.png", width(2000) height(1500)  replace
 
   erase "$Graphdir/descriptivepaper/use_patterns.gph"

@@ -815,6 +815,50 @@ keep patid pregid dd_mg aed_class* dosage*
 tab dosage
 save "$Datadir\Derived_data\CPRD\_temp\dosage_third_trimester", replace
 
+
+* Dosages for individual drugs in each trimester
+forvalues trim = 0(1)3 {
+	use  "$Datadir\Derived_data\CPRD\_temp\dosages_all_Rx.dta", clear
+	
+	if `trim'==0 {
+		keep if flag1_prepreg==1 | flag2_prepreg==1 | flag3_prepreg==1 | flag4_prepreg==1 
+	}
+	else if `trim'==1{
+		keep if flag5_preg==1
+	}
+	else if `trim'==2{
+		keep if flag6_preg==1	
+	}
+	else if `trim'==3{
+		keep if flag7_preg==1		
+	}
+		
+	replace aed_class_c="other" if aed_class_c!="valproate" & aed_class_c!="carbamazepine" & aed_class_c!="gabapentin" &  aed_class_c!="lamotrigine" & aed_class_c!="levetiracetam" & aed_class_c!="phenytoin" & aed_class_c!="pregabalin" & aed_class_c!="topiramate"
+
+	encode aed_class_c, gen(aed_class_n)
+	tab aed_class_n
+	tab aed_class_n, nol
+
+	gsort patid pregid aed_class_n -dosage 
+	by patid pregid aed_class_n: keep if _n==1
+	keep patid pregid aed_class_n dosage
+	reshape wide dosage, i(patid pregid) j(aed_class_n) 
+		   
+	rename dosage1 dosage_carbamazepine_trim`trim'
+	rename dosage2 dosage_gabapentin_trim`trim'
+	rename dosage3 dosage_lamotrigine_trim`trim'
+	rename dosage4 dosage_levetiracetam_trim`trim'
+	rename dosage5 dosage_other_trim`trim'
+	rename dosage6 dosage_phenytoin_trim`trim'
+	rename dosage7 dosage_pregabalin_trim`trim'
+	rename dosage8 dosage_topiramate_trim`trim'
+	rename dosage9 dosage_valproate_trim`trim'
+
+	save "$Datadir\Derived_data\CPRD\_temp\dosage_eachdrug_trim`trim'", replace
+} 
+
+
+
 ********************************************************************************
 * 8b - Identify highest dose from pregnancy perdiod 4 (three months before pregnancy) and from period 6 (second trimester) 
 ********************************************************************************
@@ -906,6 +950,12 @@ merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dosage_first_trim
 merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dosage_second_trimester", nogen // all matched
 merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dosage_third_trimester", nogen // all matched
 merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dosage_pre_preg", nogen // all matched
+
+merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dosage_eachdrug_trim0", nogen // all matched
+merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dosage_eachdrug_trim1", nogen // all matched
+merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dosage_eachdrug_trim2", nogen // all matched
+merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dosage_eachdrug_trim3", nogen // all matched
+
 merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dd_mg_flag4_prepreg", nogen // all matched
 merge 1:1 patid pregid using "$Datadir\Derived_data\CPRD\_temp\dd_mg_flag6_preg_second", nogen // all matched
 merge 1:1 patid pregid using  "$Datadir\Derived_data\CPRD\_temp\dd_mg_prepreg3_last", nogen
